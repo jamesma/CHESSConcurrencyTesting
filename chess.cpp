@@ -10,7 +10,7 @@
 #define THREAD_RUNNING_WAITING_FOR_LOCK         222
 #define THREAD_TERMINATED                       333
 
-#define CURRENT_MODE                            0
+#define CURRENT_MODE                            1
 #define DEBUG_MODE                              1
 
 using namespace std;
@@ -163,25 +163,15 @@ int sched_yield(void)
 
     map<pthread_t, int>::iterator it;
 
-    pthread_t newThread;
-
-    bool foundThread = false;
     for (it = THREAD_MAP.begin(); it != THREAD_MAP.end(); it++) {
         if ( it->first != pthread_self() && it->second == THREAD_RUNNING_NOT_WAITING_FOR_LOCK ) {
             if (CURRENT_MODE == DEBUG_MODE)
                 fprintf(stderr, "\t\t\tsched_yield - thread: %u is yielding to thread: %u\n", pthread_self(), it->first);
-            newThread = it->first;
-            CURRENT_THREAD = newThread;
-            //fprintf(stderr, "CURRENT_THREAD is now: %u (pthread_self is: %u)\n", CURRENT_THREAD, pthread_self());
-            foundThread = true;
+            CURRENT_THREAD = it->first;
             break;
         }
     }
-    // if (foundThread == false)
-    //     CURRENT_THREAD = pthread_self();
-    if (foundThread)
-        CURRENT_THREAD = newThread;
-    //fprintf(stderr, "SANITY CHECK ON CURRENT_THREAD: %u, newThread: %u\n", CURRENT_THREAD, newThread);
+
     while ( pthread_equal(CURRENT_THREAD, pthread_self()) == 0 ) {}
 
     original_pthread_mutex_lock(&GLOBAL_LOCK);
