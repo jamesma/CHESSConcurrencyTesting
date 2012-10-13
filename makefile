@@ -66,6 +66,7 @@ reset: chess.so
 	echo 0/0 > .tracksyncpts
 
 chessinit: chess.so reset
+	make eg source=$(source)
 	@echo "Computing Synchronization Points..."
 	./run.sh $(source)
 	@echo "Synchronization Points Computed!"
