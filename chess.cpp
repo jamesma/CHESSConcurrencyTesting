@@ -5,13 +5,19 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <map>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
 #define THREAD_RUNNING_NOT_WAITING_FOR_LOCK     111
 #define THREAD_RUNNING_WAITING_FOR_LOCK         222
 #define THREAD_TERMINATED                       333
 
-#define CURRENT_MODE                            1
+#define CURRENT_MODE                            0
 #define DEBUG_MODE                              1
+
+#define CHESS_EXPLORE_MODE                      1
+#define EXPLORE_CHESS_SCHEDULES                 1
 
 using namespace std;
 
@@ -28,15 +34,34 @@ int (*original_pthread_mutex_lock)(pthread_mutex_t*) = NULL;
 int (*original_pthread_mutex_unlock)(pthread_mutex_t*) = NULL;
 
 static void initialize_original_functions();
+static void update_track_sync_pts_file();
+static void deserialize_track_sync_pts_file(string);
+static void chess_switch_thread();
+static void synchronization_point();
+static void switch_back_to_other_running_thread();
 
 static pthread_t                                        CURRENT_THREAD = 0;
 static map<pthread_mutex_t*, pthread_t>                 MUTEX_MAP;
 static map<pthread_t, int>                              THREAD_MAP;
 static pthread_mutex_t                                  GLOBAL_LOCK = PTHREAD_MUTEX_INITIALIZER;
 
+static const char*                                      TRACK_SYNC_PTS_FILE_NAME = ".tracksyncpts";
+static ifstream                                         TRACK_SYNC_PTS_FILE;
+static bool                                             FIRST_EXECUTION = false;
+static bool                                             THREAD_SWITCHED = false;
+static int                                              CURRENT_EXECUTION = -1;
+static int                                              TOTAL_EXECUTIONS = -1;
+static int                                              SYNC_PTS_ITERATED = 1;
+static bool                                             THREAD_WAITING_FOR_JOINEE = false;
+
 static
 void* thread_main(void *arg)
 {
+    CURRENT_THREAD = pthread_self();
+
+    // Sync - Thread created
+    synchronization_point();
+
     struct Thread_Arg thread_arg = *(struct Thread_Arg*)arg;
     free(arg);
 
@@ -56,6 +81,8 @@ void* thread_main(void *arg)
         fprintf(stderr, "thread: %u terminated\n", pthread_self());
 
     THREAD_MAP[pthread_self()] = THREAD_TERMINATED;
+
+    switch_back_to_other_running_thread();
 
     // Exit a thread
     original_pthread_mutex_unlock(&GLOBAL_LOCK);
@@ -93,10 +120,14 @@ int pthread_join(pthread_t joinee, void **retval)
         if (CURRENT_MODE == DEBUG_MODE)
             fprintf(stderr, "\t\t\tpthread_join - thread: %u waiting on joinee thread: %u (%d)\n", pthread_self(), joinee, THREAD_MAP[joinee]);
         CURRENT_THREAD = joinee;
+
+        THREAD_WAITING_FOR_JOINEE = true;
+
+        while ( THREAD_MAP[joinee] != THREAD_TERMINATED ) {}
+
+        THREAD_WAITING_FOR_JOINEE = false;
     }
 
-    while ( THREAD_MAP[joinee] != THREAD_TERMINATED ) {}
-    
     original_pthread_mutex_lock(&GLOBAL_LOCK);
 
     return original_pthread_join(joinee, retval);
@@ -118,6 +149,9 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
         // Wait until program lock is not held by any other threads
         THREAD_MAP[pthread_self()] = THREAD_RUNNING_WAITING_FOR_LOCK;
         while (MUTEX_MAP[mutex] != 0) {}
+
+        // Sleep for 1 second to ensure that whatever execution that comes after unlocking a mutex is fully executed
+        //sleep(1);
         CURRENT_THREAD = pthread_self();
 
         original_pthread_mutex_lock(&GLOBAL_LOCK);
@@ -125,6 +159,9 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
         if (CURRENT_MODE == DEBUG_MODE)
             fprintf(stderr, "thread: %u now holds program lock %x\n", pthread_self(), mutex);
         THREAD_MAP[pthread_self()] = THREAD_RUNNING_NOT_WAITING_FOR_LOCK;
+
+        // Sync - Before mutex is locked
+        synchronization_point();
         MUTEX_MAP[mutex] = pthread_self();
     } else {
         if (CURRENT_MODE == DEBUG_MODE) {
@@ -132,6 +169,10 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
             fprintf(stderr, "thread %u now holds program lock %x\n", pthread_self(), mutex);
         }
         THREAD_MAP[pthread_self()] = THREAD_RUNNING_NOT_WAITING_FOR_LOCK;
+
+        // Sync - Before mutex is locked
+        synchronization_point();
+        
         MUTEX_MAP[mutex] = pthread_self();
     }
 
@@ -149,11 +190,17 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
         if (MUTEX_MAP[mutex] != 0)
             fprintf(stderr, "\t\t\tthread: %u frees on program lock %x\n", MUTEX_MAP[mutex], mutex);
 
+    int ret = original_pthread_mutex_unlock(mutex);
+
     // This program lock is no longer held by this thread
-    if ( pthread_equal(MUTEX_MAP[mutex], pthread_self()) )
+    if ( pthread_equal(MUTEX_MAP[mutex], pthread_self()) ) {
         MUTEX_MAP[mutex] = 0;
 
-    return original_pthread_mutex_unlock(mutex);
+        // Sync - After mutex is released
+        synchronization_point();
+    }
+
+    return ret;
 }
 
 extern "C"
@@ -163,7 +210,7 @@ int sched_yield(void)
 
     map<pthread_t, int>::iterator it;
 
-    for (it = THREAD_MAP.begin(); it != THREAD_MAP.end(); it++) {
+    for (it = THREAD_MAP.begin(); it != THREAD_MAP.end() && !THREAD_WAITING_FOR_JOINEE; it++) {
         if ( it->first != pthread_self() && it->second == THREAD_RUNNING_NOT_WAITING_FOR_LOCK ) {
             if (CURRENT_MODE == DEBUG_MODE)
                 fprintf(stderr, "\t\t\tsched_yield - thread: %u is yielding to thread: %u\n", pthread_self(), it->first);
@@ -179,6 +226,105 @@ int sched_yield(void)
     return 0;
 }
 
+static 
+void switch_back_to_other_running_thread()
+{
+    map<pthread_t, int>::iterator it;
+
+    for (it = THREAD_MAP.begin(); it != THREAD_MAP.end(); it++) {
+        if ( it->first != pthread_self() && it->second != THREAD_TERMINATED ) {
+            CURRENT_THREAD = it->first;
+            break;
+        }
+    }
+}
+
+static
+void synchronization_point()
+{
+    if (CHESS_EXPLORE_MODE == EXPLORE_CHESS_SCHEDULES) {
+        if (FIRST_EXECUTION) {
+            TOTAL_EXECUTIONS++;
+            fprintf(stderr, "SYNCHRONIZATION PT %d HERE\n", TOTAL_EXECUTIONS);
+        } else {
+            chess_switch_thread();
+        }
+        update_track_sync_pts_file();
+    }
+}
+
+static
+void chess_switch_thread()
+{
+    if (SYNC_PTS_ITERATED == CURRENT_EXECUTION && !THREAD_SWITCHED) {
+        THREAD_SWITCHED = true;
+        CURRENT_EXECUTION++;
+        // Reset current execution count when total reached
+        if (CURRENT_EXECUTION > TOTAL_EXECUTIONS)
+            CURRENT_EXECUTION = 1;
+        sched_yield();
+    }
+    SYNC_PTS_ITERATED++;
+}
+
+static
+void update_track_sync_pts_file()
+{
+    string newString;
+    stringstream temp1;
+    stringstream temp2;
+    temp1 << CURRENT_EXECUTION;
+    newString.append(temp1.str());
+    newString.append("/");
+    temp2 << TOTAL_EXECUTIONS;
+    newString.append(temp2.str());
+
+    if (CURRENT_MODE == DEBUG_MODE)
+        fprintf(stderr, "newString: %s\n", newString.c_str());
+
+    // Write back to file
+    ofstream outfile;
+    outfile.open(TRACK_SYNC_PTS_FILE_NAME);
+
+    if (outfile)
+        outfile.write(newString.c_str(), (int)newString.length());
+
+    outfile.close();
+}
+
+static
+void deserialize_track_sync_pts_file(string str)
+{
+    int len = str.length();
+    int DELIMITER_POS = str.find('/');
+    if (DELIMITER_POS == (int)string::npos) {
+        fprintf(stderr, "CORRUPT DATA\n");
+        return;
+    }
+    string current = str.substr(0, DELIMITER_POS);
+    string total = str.substr(DELIMITER_POS + 1, len);
+
+    // Read data and store them in static global int variables
+    CURRENT_EXECUTION = atoi(current.c_str());
+    TOTAL_EXECUTIONS = atoi(total.c_str());
+
+    // if (CURRENT_MODE == DEBUG_MODE) {
+    //     fprintf(stderr, "current: %d\n", CURRENT_EXECUTION);
+    //     fprintf(stderr, "total: %d\n", TOTAL_EXECUTIONS);
+    // }
+
+    // Check if this is the first execution, set flag if so
+    if (CURRENT_EXECUTION == 0 && TOTAL_EXECUTIONS == 0) {
+        FIRST_EXECUTION = true;
+        CURRENT_EXECUTION = 1;
+        if (CURRENT_MODE == DEBUG_MODE)
+            fprintf(stderr, ">>>>>>>>>>>>>>> FIRST EXECUTION <<<<<<<<<<<<<<<\n");
+        return;
+    }
+
+    fprintf(stderr, ">>>>>>>>>>>>>>> EXECUTION: %d/%d <<<<<<<<<<<<<<<\n", CURRENT_EXECUTION, TOTAL_EXECUTIONS);
+}
+
 static
 void initialize_original_functions()
 {
@@ -186,8 +332,25 @@ void initialize_original_functions()
     if (!initialized) {
         initialized = true;
 
+        if (CHESS_EXPLORE_MODE == EXPLORE_CHESS_SCHEDULES) {
+            string input;
+            TRACK_SYNC_PTS_FILE.open(TRACK_SYNC_PTS_FILE_NAME);
+
+            if (TRACK_SYNC_PTS_FILE) {
+                while (!TRACK_SYNC_PTS_FILE.eof()) {
+                    TRACK_SYNC_PTS_FILE >> input;
+                }
+                TRACK_SYNC_PTS_FILE.close();
+                deserialize_track_sync_pts_file(input);
+                // fprintf(stderr, "input: %s\n", input.c_str());
+            } else {
+                FIRST_EXECUTION = true;
+                fprintf(stderr, "NO DATA IN .tracksyncpts\n");
+            }
+        }
+
         if (CURRENT_MODE == DEBUG_MODE)
-            fprintf(stderr, "----------\n");
+            fprintf(stderr, "--------------------------------------------------\n");
 
         original_pthread_create =
             (int (*)(pthread_t*, const pthread_attr_t*, void* (*)(void*), void*))dlsym(RTLD_NEXT, "pthread_create");
