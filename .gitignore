@@ -14,3 +14,7 @@
 
 # dSYM folder
 *dSYM/
+
+# Sample binaries
+sample1
+sample2
