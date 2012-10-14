@@ -17,6 +17,7 @@ struct SyncPts {
 };
 
 void check_arguments(int, char**);
+void check_file_exists();
 void initialize_chess_tool();
 void first_execution();
 int run_command(string);
@@ -36,6 +37,8 @@ int main(int argc, char *argv[])
 {
   check_arguments(argc, argv);
 
+  check_file_exists();
+
   initialize_chess_tool();
 
   first_execution();
@@ -53,6 +56,16 @@ void check_arguments(int argc, char *argv[])
     exit(0);
   }
   TEST_PROGRAM = argv[1];
+}
+
+// Check if file exists
+void check_file_exists()
+{
+  ifstream infile(TEST_PROGRAM);
+  if (!infile.good()) {
+    fprintf(stderr, "Error: File doesn't exist or there is a problem opening it. Make sure it is readable and exists.\n");
+    exit(0);
+  }
 }
 
 // Initialize tracking file with initialization values
