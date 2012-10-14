@@ -20,15 +20,13 @@ Finding Atomicity Violations (Part 2)
 
 3. Compile the CHESS tool binary: `make chesstool`
 
-4. At last, we now have the CHESS tool binary `chesstool`.
+At last, we now have the CHESS tool binary `chesstool`. To check `sample2` for atomicity violations, run the CHESS tool with the proper arguments: `./chesstool sample2`
 
-To check `sample2` for atomicity violations, run the CHESS tool with the proper arguments: `./chesstool sample2`
-
-The CHESS tool will now execute the program by first finding all synchronization points and writing them to a dotfile `.tracksyncpts`. Then it will iterate over all of the synchronization points. If the program crashes during an execution, CHESS tool will make a note of it and continue to the next iteration. 
+The CHESS tool will now execute the program by finding all synchronization points and writing them to a dotfile `.tracksyncpts`. After that, it will iterate over all of the synchronization points. If the program crashes during an execution, CHESS tool will make a note of it and continue to the next iteration. 
 
 After all iterations have been executed, a crash report will be printed at the end, detailing the synchronization point that an execution has failed.
 
-If concurrency errors (atomicity violation in particular) are not detected, a cookie is given. :smile:
+If no concurrency errors (atomicity violation in particular) are detected, a cookie is given. :smile:
 
 In-Depth Explanation of Implementation
 ======================================
