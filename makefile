@@ -4,6 +4,10 @@ chess.so: chess.cpp
 	@echo "Compiling chess.cpp..."
 	$(CC) -o $@ -Wall -shared -g -O0 -D_GNU_SOURCE -fPIC -ldl $^
 
+chesstool: chesstool.cpp
+	@echo "Compiling CHESS tool..."
+	$(CC) -o chesstool chesstool.cpp
+
 eg:
 	@echo "Compiling sample..."
 	gcc -o $(source) -lpthread -lrt $(source).c
@@ -73,10 +77,6 @@ chessinit: chess.so reset
 	@echo -ne "Synchronization Points File: "
 	@cat .tracksyncpts
 	@echo ""
-
-chesstool: chess.so
-	@echo "Running CHESS tool..."
-	make chessinit source=$(source)
 
 clean:
 	rm -f chess.so
