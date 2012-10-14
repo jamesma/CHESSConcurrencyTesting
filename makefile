@@ -80,6 +80,7 @@ chessinit: chess.so reset
 
 clean:
 	rm -f chess.so
+	rm -f chesstool
 	rm -f result1
 	rm -f result2
 	rm -f result3
