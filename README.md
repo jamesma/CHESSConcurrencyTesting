@@ -5,20 +5,22 @@ Author: Jun Yan Ma (ma23@purdue.edu)
 
 Project link: http://www.cs.purdue.edu/homes/kim1051/cs490/proj2/p2.html
 
-CHESS program is located at `chess.cpp`.
+CHESS program containing pthread function hooks is located at `chess.cpp`.
+
+CHESS tool is located at `chesstool.cpp`.
 
 Finding Atomicity Violations (Part 2)
 =====================================
 
 `sample2.c` has an atomicity violation bug and it will crash the program in a certain schedule.
 
-1. Firstly, compile the `sample2` binary giving our `chess.so` shared object precedence: `make eg source=sample2`
+1. Compile the `sample2` binary by giving our `chess.so` shared object precedence: `make eg source=sample2`
 
 2. Ensure that `chess.cpp` has been built: `make chess.so`
 
-3. Then, compile the CHESS tool binary: `make chesstool`
+3. Compile the CHESS tool binary: `make chesstool`
 
-4. At last, we have the CHESS tool `chesstool`
+4. At last, we now have the CHESS tool binary `chesstool`.
 
 To check `sample2` for atomicity violations, run the CHESS tool with the proper arguments: `./chesstool sample2`
 
