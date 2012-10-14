@@ -24,7 +24,7 @@ At last, we now have the CHESS tool binary `chesstool`. To check `sample2` for a
 
 The CHESS tool will now execute the program by finding all synchronization points and writing them to a dotfile `.tracksyncpts`. After that, it will iterate over all of the synchronization points. If the program crashes during an execution, CHESS tool will make a note of it and continue to the next iteration. 
 
-After all iterations have been executed, a crash report will be printed at the end, detailing the synchronization point that an execution has failed.
+After all iterations have been executed, a crash report will be printed at the end, detailing the synchronization points where execution has failed.
 
 If no concurrency errors (atomicity violation in particular) are detected, a cookie is given. :smile:
 

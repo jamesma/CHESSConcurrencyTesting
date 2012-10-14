@@ -65,6 +65,7 @@ void initialize_chess_tool()
   outfile.close();
 }
 
+// Find synchronization points and write to tracking file
 void first_execution()
 {
   fprintf(stderr, "========== Finding Synchronization Points ==========\n");
@@ -94,6 +95,7 @@ int run_command(string command)
   return system(cmd);
 }
 
+// Read tracking file and returns SyncPts struct
 SyncPts read_sync_pts()
 {
   string input;
@@ -133,12 +135,14 @@ int read_total_sync_pts()
   return pts.total;
 }
 
+// Read tracking file and returns the current synchronization point found
 int read_current_sync_pts()
 {
   SyncPts pts = read_sync_pts();
   return pts.current;
 }
 
+// Write to tracking file with values in SyncPts argument
 void update_track_sync_pts_file(SyncPts pts)
 {
     string newString;
@@ -200,7 +204,7 @@ void print_crash_report(int *crashes)
     fprintf(stderr, "No crash occurred! You get a cookie.\n");
     print_oreo_cookie();
   }
-  
+
   for (int i = 0; crashes[i] != '\0'; i++) {
     fprintf(stderr, "Crash occurred at synchronization point %d/%d\n", crashes[i], TOTAL_SYNC_PTS);
   }
