@@ -3,11 +3,11 @@ CHESSConcurrencyTesting
 
 Author: Jun Yan Ma (ma23@purdue.edu)
 
-Project link: http://www.cs.purdue.edu/homes/kim1051/cs490/proj2/p2.html
+Project description: ProjectDescription.pdf
 
-CHESS program containing pthread function hooks is located at `chess.cpp`.
+CHESS program containing pthread function hooks: `chess.cpp`.
 
-CHESS tool is located at `chesstool.cpp`.
+CHESS tool: `chesstool.cpp`.
 
 Finding Atomicity Violations (Part 2)
 =====================================
